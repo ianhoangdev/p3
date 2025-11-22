@@ -60,16 +60,30 @@ void Wad::loadFileData() {
 
 void Wad::buildTree() {
     root = new Node("", true);
+
+    vector<pair<Node*, string>> dirStack;
+    dirStack.push_back(make_pair(root, ""));
     
     for (size_t i = 0; i < descriptors.size(); i++) {
         string name(descriptors[i].name);
+        Node* currentDir = dirStack.back().first;
+        
+        // Check for namespace end marker
+        if (name.length() > 4 && name.substr(name.length() - 4) == "_END") {
+            string nsName = name.substr(0, name.length() - 4);
+            // Pop if this matches the current namespace
+            if (!dirStack.empty() && dirStack.back().second == nsName) {
+                dirStack.pop_back();
+            }
+            continue;
+        }
         
         // Check for map marker (E#M#)
         if (name.length() == 4 && name[0] == 'E' && name[2] == 'M' &&
             isdigit(name[1]) && isdigit(name[3])) {
             Node* mapDir = new Node(name, true, i);
-            mapDir->parent = root;
-            root->children.push_back(mapDir);
+            mapDir->parent = currentDir;
+            currentDir->children.push_back(mapDir);
             
             // Add next 10 elements to this map
             for (int j = 1; j <= 10 && i + j < descriptors.size(); j++) {
@@ -79,78 +93,21 @@ void Wad::buildTree() {
             }
             i += 10;
         }
-        // Check for namespace start
+        // Check for namespace start marker
         else if (name.length() > 6 && name.substr(name.length() - 6) == "_START") {
             string nsName = name.substr(0, name.length() - 6);
             Node* nsDir = new Node(nsName, true, i);
-            nsDir->parent = root;
-            root->children.push_back(nsDir);
+            nsDir->parent = currentDir;
+            currentDir->children.push_back(nsDir);
             
-            // Find matching _END
-            i++;
-            while (i < descriptors.size()) {
-                string currentName(descriptors[i].name);
-                
-                if (currentName == nsName + "_END") {
-                    break;
-                }
-                
-                // Check for nested namespace
-                if (currentName.length() > 6 && currentName.substr(currentName.length() - 6) == "_START") {
-                    string nestedNsName = currentName.substr(0, currentName.length() - 6);
-                    Node* nestedDir = new Node(nestedNsName, true, i);
-                    nestedDir->parent = nsDir;
-                    nsDir->children.push_back(nestedDir);
-                    
-                    i++;
-                    while (i < descriptors.size()) {
-                        string nestedCurrentName(descriptors[i].name);
-                        if (nestedCurrentName == nestedNsName + "_END") {
-                            break;
-                        }
-                        
-                        // Check for map marker inside nested namespace
-                        if (nestedCurrentName.length() == 4 && nestedCurrentName[0] == 'E' && 
-                            nestedCurrentName[2] == 'M' && isdigit(nestedCurrentName[1]) && 
-                            isdigit(nestedCurrentName[3])) {
-                            Node* mapDir = new Node(nestedCurrentName, true, i);
-                            mapDir->parent = nestedDir;
-                            nestedDir->children.push_back(mapDir);
-                            
-                            for (int j = 1; j <= 10 && i + j < descriptors.size(); j++) {
-                                Node* child = new Node(string(descriptors[i + j].name), false, i + j);
-                                child->parent = mapDir;
-                                mapDir->children.push_back(child);
-                            }
-                            i += 10;
-                        } else {
-                            Node* child = new Node(nestedCurrentName, false, i);
-                            child->parent = nestedDir;
-                            nestedDir->children.push_back(child);
-                        }
-                        i++;
-                    }
-                }
-                // Check for map marker
-                else if (currentName.length() == 4 && currentName[0] == 'E' && 
-                         currentName[2] == 'M' && isdigit(currentName[1]) && isdigit(currentName[3])) {
-                    Node* mapDir = new Node(currentName, true, i);
-                    mapDir->parent = nsDir;
-                    nsDir->children.push_back(mapDir);
-                    
-                    for (int j = 1; j <= 10 && i + j < descriptors.size(); j++) {
-                        Node* child = new Node(string(descriptors[i + j].name), false, i + j);
-                        child->parent = mapDir;
-                        mapDir->children.push_back(child);
-                    }
-                    i += 10;
-                } else {
-                    Node* child = new Node(currentName, false, i);
-                    child->parent = nsDir;
-                    nsDir->children.push_back(child);
-                }
-                i++;
-            }
+            // Push this namespace onto the stack
+            dirStack.push_back(make_pair(nsDir, nsName));
+        }
+        // Regular file - add to current directory
+        else {
+            Node* child = new Node(name, false, i);
+            child->parent = currentDir;
+            currentDir->children.push_back(child);
         }
     }
 }
