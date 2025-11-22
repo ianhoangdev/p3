@@ -74,8 +74,8 @@ void Wad::buildTree() {
             // Pop if this matches the current namespace
             if (!dirStack.empty() && dirStack.back().second == nsName) {
                 dirStack.pop_back();
+                continue;
             }
-            continue;
         }
         
         // Check for map marker (E#M#)
@@ -247,15 +247,15 @@ void Wad::createDirectory(const string &path) {
     Descriptor startDesc;
     startDesc.offset = 0;
     startDesc.length = 0;
+    memset(startDesc.name, 0, 9);
     strncpy(startDesc.name, (dirName + "_START").c_str(), 8);
-    startDesc.name[8] = '\0';
     
     // Create END marker
     Descriptor endDesc;
     endDesc.offset = 0;
     endDesc.length = 0;
+    memset(endDesc.name, 0, 9);
     strncpy(endDesc.name, (dirName + "_END").c_str(), 8);
-    endDesc.name[8] = '\0';
     
     descriptors.insert(descriptors.begin() + insertIdx, startDesc);
     descriptors.insert(descriptors.begin() + insertIdx + 1, endDesc);
@@ -327,41 +327,54 @@ int Wad::writeToFile(const string &path, const char *buffer, int length, int off
     
     Descriptor& desc = descriptors[node->descriptorIndex];
     
-    // Calculate new size
-    int newSize = offset + length;
-    if (newSize > (int)desc.length) {
-        // Need to expand file
-        desc.offset = fileData.size();
-        desc.length = newSize;
-        fileData.resize(fileData.size() + newSize);
+    int fd = open(wadPath.c_str(), O_RDWR);
+    if (fd < 0) return -1;
+
+    if (desc.length == 0) {
+
+        desc.offset = header.descriptorOffset;
+        desc.length = length;
+
+        lseek(fd, desc.offset, SEEK_SET);
+        write(fd, buffer, length);
+
+        header.descriptorOffset += length;
+    } 
+    else {
+        if (offset + length > (int)desc.length) {
+             desc.offset = header.descriptorOffset;
+             desc.length = offset + length;
+             header.descriptorOffset += desc.length;
+             lseek(fd, desc.offset, SEEK_SET);
+             write(fd, buffer, length);
+        } 
+        lseek(fd, desc.offset + offset, SEEK_SET);
+        write(fd, buffer, length);
     }
     
-    memcpy(fileData.data() + desc.offset + offset, buffer, length);
-    
-    saveToFile();
-    
+    close(fd);
+
+    saveToFile(); 
+    loadFileData(); 
+
     return length;
 }
 
 void Wad::saveToFile() {
-    int fd = open(wadPath.c_str(), O_WRONLY | O_TRUNC);
+    int fd = open(wadPath.c_str(), O_RDWR);
     if (fd < 0) return;
     
-    // Update descriptor offset
-    header.descriptorOffset = fileData.size();
-    
-    // Write header
+
+    lseek(fd, 0, SEEK_SET);
     write(fd, header.magic, 4);
-    write(fd, &header.numDescriptors, sizeof(uint32_t));
-    write(fd, &header.descriptorOffset, sizeof(uint32_t));
+    write(fd, &header.numDescriptors, 4);
+    write(fd, &header.descriptorOffset, 4);
     
-    // Write file data
-    write(fd, fileData.data(), fileData.size());
+    lseek(fd, header.descriptorOffset, SEEK_SET);
     
-    // Write descriptors
     for (const auto& desc : descriptors) {
-        write(fd, &desc.offset, sizeof(uint32_t));
-        write(fd, &desc.length, sizeof(uint32_t));
+        write(fd, &desc.offset, 4);
+        write(fd, &desc.length, 4);
         write(fd, desc.name, 8);
     }
     
