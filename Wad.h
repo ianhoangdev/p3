@@ -1,44 +1,69 @@
-#pragma once
+#ifndef WAD_H
+#define WAD_H
+
 #include <string>
 #include <vector>
-#include <cstdint>
 
-struct WadHeader {
-    char magic[4];
-    uint32_t numDescriptors;
-    uint32_t descriptorOffset;
-};
+using namespace std;
 
-struct WadDescriptor {
-    uint32_t elementOffset;
-    uint32_t elementLength;
-    char name[8];
-};
-
-// 2. Define the Class Interface
-// This matches the requirements in the PDF [cite: 68-96]
 class Wad {
 private:
-    // You need to store the file data in memory!
-    std::vector<uint8_t> fileData; 
-    std::vector<WadDescriptor> descriptors; // The "Table of Contents"
+    struct Descriptor {
+        uint32_t offset;
+        uint32_t length;
+        char name[9];  // 8 chars + null terminator
+    };
 
-    // Helper to find a descriptor index based on a path like "/F/F1/LOLWUT"
-    int resolvePath(const std::string &path);
+    struct Header {
+        char magic[5];  // 4 chars + null terminator
+        uint32_t numDescriptors;
+        uint32_t descriptorOffset;
+    };
+
+    struct Node {
+        string name;
+        bool isDirectory;
+        int descriptorIndex;
+        vector<Node*> children;
+        Node* parent;
+        
+        Node(const string& n, bool isDir, int descIdx = -1) 
+            : name(n), isDirectory(isDir), descriptorIndex(descIdx), parent(nullptr) {}
+        
+        ~Node() {
+            for (auto child : children) {
+                delete child;
+            }
+        }
+    };
+
+    Header header;
+    vector<Descriptor> descriptors;
+    vector<char> fileData;
+    string wadPath;
+    Node* root;
+
+    void buildTree();
+    Node* findNode(const string& path);
+    void saveToFile();
+    void loadFileData();
+    Node* getParentNode(const string& path);
+    string getFileName(const string& path);
 
 public:
-    // Constructor is private, use the static loader
-    Wad(const uint8_t *data, size_t size); 
+    Wad();
+    ~Wad();
     
-    // Required Public API
-    static Wad* loadWad(const std::string &path);
-    std::string getMagic();
-    bool isContent(const std::string &path);
-    bool isDirectory(const std::string &path);
-    int getSize(const std::string &path);
-    int getContents(const std::string &path, char *buffer, int length, int offset = 0);
-    int getDirectory(const std::string &path, std::vector<std::string> *directory);
-    void createDirectory(const std::string &path);
-    void createFile(const std::string &path);
-    int writeToFile(const std::string &path, const char *buffer, int length, int offset = 0);
+    static Wad* loadWad(const string &path);
+    string getMagic();
+    bool isContent(const string &path);
+    bool isDirectory(const string &path);
+    int getSize(const string &path);
+    int getContents(const string &path, char *buffer, int length, int offset = 0);
+    int getDirectory(const string &path, vector<string> *directory);
+    void createDirectory(const string &path);
+    void createFile(const string &path);
+    int writeToFile(const string &path, const char *buffer, int length, int offset = 0);
 };
+
+#endif
