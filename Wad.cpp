@@ -216,6 +216,19 @@ void Wad::createDirectory(const string &path) {
     
     string dirName = getFileName(path);
     
+    if (dirName.length() > 2) {
+        return;
+    }
+    
+    if (parent != root && parent->isDirectory) {
+        // Check if parent is a map marker (E#M# format)
+        string parentName = parent->name;
+        if (parentName.length() == 4 && parentName[0] == 'E' && 
+            isdigit(parentName[1]) && parentName[2] == 'M' && isdigit(parentName[3])) {
+            return;
+        }
+    }
+    
     // Find insertion point (before parent's _END marker)
     int insertIdx = descriptors.size();
     
@@ -266,6 +279,14 @@ void Wad::createFile(const string &path) {
     if (parent == nullptr) return;
     
     string fileName = getFileName(path);
+    
+    if (parent != root && parent->isDirectory) {
+        string parentName = parent->name;
+        if (parentName.length() == 4 && parentName[0] == 'E' && 
+            isdigit(parentName[1]) && parentName[2] == 'M' && isdigit(parentName[3])) {
+            return;
+        }
+    }
     
     int insertIdx = descriptors.size();
     
