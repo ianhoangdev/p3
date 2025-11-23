@@ -330,8 +330,8 @@ int Wad::writeToFile(const string &path, const char *buffer, int length, int off
     int fd = open(wadPath.c_str(), O_RDWR);
     if (fd < 0) return -1;
 
+    // The file is empty
     if (desc.length == 0) {
-
         desc.offset = header.descriptorOffset;
         desc.length = length;
 
@@ -340,22 +340,33 @@ int Wad::writeToFile(const string &path, const char *buffer, int length, int off
 
         header.descriptorOffset += length;
     } 
+    // The file has data
     else {
         if (offset + length > (int)desc.length) {
+             int oldSize = desc.length;
+             int newSize = offset + length;
+             int oldOffset = desc.offset;
+
              desc.offset = header.descriptorOffset;
-             desc.length = offset + length;
-             header.descriptorOffset += desc.length;
+             desc.length = newSize;
+             header.descriptorOffset += newSize;
+
              lseek(fd, desc.offset, SEEK_SET);
+             write(fd, fileData.data() + oldOffset, oldSize);
+
+             lseek(fd, desc.offset + offset, SEEK_SET);
              write(fd, buffer, length);
         } 
-        lseek(fd, desc.offset + offset, SEEK_SET);
-        write(fd, buffer, length);
+        else {
+            lseek(fd, desc.offset + offset, SEEK_SET);
+            write(fd, buffer, length);
+        }
     }
     
     close(fd);
 
     saveToFile(); 
-    loadFileData(); 
+    loadFileData();
 
     return length;
 }
