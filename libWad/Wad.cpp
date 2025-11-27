@@ -22,13 +22,11 @@ Wad* Wad::loadWad(const string &path) {
         return nullptr;
     }
     
-    // Read header
     read(fd, wad->header.magic, 4);
     wad->header.magic[4] = '\0';
     read(fd, &wad->header.numDescriptors, sizeof(uint32_t));
     read(fd, &wad->header.descriptorOffset, sizeof(uint32_t));
     
-    // Read descriptors
     lseek(fd, wad->header.descriptorOffset, SEEK_SET);
     wad->descriptors.resize(wad->header.numDescriptors);
     
@@ -71,7 +69,6 @@ void Wad::buildTree() {
         // Check for namespace end marker
         if (name.length() > 4 && name.substr(name.length() - 4) == "_END") {
             string nsName = name.substr(0, name.length() - 4);
-            // Pop if this matches the current namespace
             if (!dirStack.empty() && dirStack.back().second == nsName) {
                 dirStack.pop_back();
                 continue;
@@ -85,7 +82,6 @@ void Wad::buildTree() {
             mapDir->parent = currentDir;
             currentDir->children.push_back(mapDir);
             
-            // Add next 10 elements to this map
             for (int j = 1; j <= 10 && i + j < descriptors.size(); j++) {
                 Node* child = new Node(string(descriptors[i + j].name), false, i + j);
                 child->parent = mapDir;
@@ -100,7 +96,6 @@ void Wad::buildTree() {
             nsDir->parent = currentDir;
             currentDir->children.push_back(nsDir);
             
-            // Push this namespace onto the stack
             dirStack.push_back(make_pair(nsDir, nsName));
         }
         // Regular file - add to current directory

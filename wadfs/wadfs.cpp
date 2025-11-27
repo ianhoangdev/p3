@@ -106,7 +106,6 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     
-    // Find the WAD file argument (not starting with -)
     string wadFile;
     int wadArgIndex = -1;
     for (int i = 1; i < argc - 1; i++) {
@@ -126,7 +125,6 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     
-    // Remove WAD file argument from argv for FUSE
     for (int i = wadArgIndex; i < argc - 1; i++) {
         argv[i] = argv[i + 1];
     }

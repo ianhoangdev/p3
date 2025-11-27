@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <cstdint>
 
 using namespace std;
 
@@ -11,11 +12,11 @@ private:
     struct Descriptor {
         uint32_t offset;
         uint32_t length;
-        char name[9];  // 8 chars + null terminator
+        char name[9];
     };
 
     struct Header {
-        char magic[5];  // 4 chars + null terminator
+        char magic[5];
         uint32_t numDescriptors;
         uint32_t descriptorOffset;
     };
