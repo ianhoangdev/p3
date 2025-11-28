@@ -278,6 +278,13 @@ void Wad::createFile(const string &path) {
     if (parent == nullptr) return;
     
     string fileName = getFileName(path);
+
+    if (fileName.length() > 6 && fileName.substr(fileName.length() - 6) == "_START") {
+        return;
+    }
+    if (fileName.length() > 4 && fileName.substr(fileName.length() - 4) == "_END") {
+        return;
+    }
     
     if (parent != root && parent->isDirectory) {
         string parentName = parent->name;
