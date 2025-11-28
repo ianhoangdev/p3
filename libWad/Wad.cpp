@@ -108,7 +108,9 @@ void Wad::buildTree() {
 }
 
 Wad::Node* Wad::findNode(const string& path) {
-    if (path == "/" || path.empty()) {
+    if (path.empty()) return nullptr;
+
+    if (path == "/") {
         return root;
     }
     
@@ -227,12 +229,21 @@ void Wad::createDirectory(const string &path) {
     int insertIdx = descriptors.size();
     
     if (parent != root) {
-        // Find parent's _END marker
-        for (size_t i = 0; i < descriptors.size(); i++) {
+        int startIdx = parent->descriptorIndex;
+        int depth = 0;
+        
+        for (size_t i = startIdx + 1; i < descriptors.size(); i++) {
             string name(descriptors[i].name);
-            if (name == parent->name + "_END") {
-                insertIdx = i;
-                break;
+            
+            if (name.length() > 6 && name.substr(name.length() - 6) == "_START") {
+                depth++;
+            }
+            else if (name.length() > 4 && name.substr(name.length() - 4) == "_END") {
+                if (depth == 0) {
+                    insertIdx = i;
+                    break;
+                }
+                depth--;
             }
         }
     }
@@ -279,11 +290,21 @@ void Wad::createFile(const string &path) {
     int insertIdx = descriptors.size();
     
     if (parent != root) {
-        for (size_t i = 0; i < descriptors.size(); i++) {
+        int startIdx = parent->descriptorIndex;
+        int depth = 0;
+        
+        for (size_t i = startIdx + 1; i < descriptors.size(); i++) {
             string name(descriptors[i].name);
-            if (name == parent->name + "_END") {
-                insertIdx = i;
-                break;
+            
+            if (name.length() > 6 && name.substr(name.length() - 6) == "_START") {
+                depth++;
+            }
+            else if (name.length() > 4 && name.substr(name.length() - 4) == "_END") {
+                if (depth == 0) {
+                    insertIdx = i;
+                    break;
+                }
+                depth--;
             }
         }
     }
