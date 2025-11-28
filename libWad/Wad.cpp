@@ -98,7 +98,7 @@ void Wad::buildTree() {
             
             dirStack.push_back(make_pair(nsDir, nsName));
         }
-        // Regular file - add to current directory
+        // Regular file: add to current directory
         else {
             Node* child = new Node(name, false, i);
             child->parent = currentDir;
@@ -224,7 +224,6 @@ void Wad::createDirectory(const string &path) {
         }
     }
     
-    // Find insertion point (before parent's _END marker)
     int insertIdx = descriptors.size();
     
     if (parent != root) {
@@ -257,14 +256,8 @@ void Wad::createDirectory(const string &path) {
     
     header.numDescriptors += 2;
     
-    // Update tree
-    Node* newDir = new Node(dirName, true, insertIdx);
-    newDir->parent = parent;
-    parent->children.push_back(newDir);
-    
     saveToFile();
     
-    // Rebuild tree
     delete root;
     buildTree();
 }
@@ -304,10 +297,6 @@ void Wad::createFile(const string &path) {
     descriptors.insert(descriptors.begin() + insertIdx, fileDesc);
     header.numDescriptors++;
     
-    Node* newFile = new Node(fileName, false, insertIdx);
-    newFile->parent = parent;
-    parent->children.push_back(newFile);
-    
     saveToFile();
     
     delete root;
@@ -334,7 +323,7 @@ int Wad::writeToFile(const string &path, const char *buffer, int length, int off
         write(fd, buffer, length);
 
         header.descriptorOffset += length;
-    } 
+    }
     // The file has data
     else {
         if (offset + length > (int)desc.length) {
