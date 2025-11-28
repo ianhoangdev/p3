@@ -192,83 +192,116 @@ int Wad::getDirectory(const string &path, vector<string> *directory) {
 }
 
 Wad::Node* Wad::getParentNode(const string& path) {
-    size_t lastSlash = path.find_last_of('/');
-    if (lastSlash == string::npos || lastSlash == 0) {
+    if (path.empty()) return root;
+    // Trim trailing slashes
+    size_t end = path.size();
+    while (end > 0 && path[end - 1] == '/') {
+        --end;
+    }
+    if (end == 0) return root; // path was "/" or all slashes
+
+    size_t lastSlash = path.rfind('/', end - 1);
+    if (lastSlash == string::npos) {
+        return root;
+    }
+    if (lastSlash == 0) {
         return root;
     }
     return findNode(path.substr(0, lastSlash));
 }
 
 string Wad::getFileName(const string& path) {
-    size_t lastSlash = path.find_last_of('/');
-    if (lastSlash == string::npos) {
-        return path;
+    if (path.empty()) return "";
+    // Skip trailing slash(es)
+    size_t end = path.size();
+    while (end > 0 && path[end - 1] == '/') {
+        --end;
     }
-    return path.substr(lastSlash + 1);
+    if (end == 0) return ""; // path was "/" or all slashes
+
+    size_t lastSlash = path.rfind('/', end - 1);
+    if (lastSlash == string::npos) {
+        return path.substr(0, end);
+    }
+    return path.substr(lastSlash + 1, end - (lastSlash + 1));
 }
 
 void Wad::createDirectory(const string &path) {
     Node* parent = getParentNode(path);
     if (parent == nullptr) return;
-    
+
     string dirName = getFileName(path);
-    
+
+    // Reject empty names
+    if (dirName.empty()) {
+        return;
+    }
+
+    // Validate name length (max 2 chars for namespaces)
     if (dirName.length() > 2) {
         return;
     }
-    
+
+    // Check if parent is a map marker (cannot create inside map)
     if (parent != root && parent->isDirectory) {
-        // Check if parent is a map marker (E#M# format)
         string parentName = parent->name;
         if (parentName.length() == 4 && parentName[0] == 'E' && 
             isdigit(parentName[1]) && parentName[2] == 'M' && isdigit(parentName[3])) {
             return;
         }
     }
-    
+
+    // --- FIX: Logic to find the CORRECT insertion index ---
     int insertIdx = descriptors.size();
     
     if (parent != root) {
+        // Start searching AFTER the parent's descriptor
         int startIdx = parent->descriptorIndex;
         int depth = 0;
         
+        // Scan forward to find the MATCHING _END tag
         for (size_t i = startIdx + 1; i < descriptors.size(); i++) {
             string name(descriptors[i].name);
             
+            // If we hit a nested namespace start, go deeper
             if (name.length() > 6 && name.substr(name.length() - 6) == "_START") {
                 depth++;
             }
+            // If we hit a namespace end
             else if (name.length() > 4 && name.substr(name.length() - 4) == "_END") {
                 if (depth == 0) {
+                    // We found OUR parent's closing tag
                     insertIdx = i;
                     break;
                 }
+                // This was a nested directory closing, pop back up
                 depth--;
             }
         }
     }
-    
+    // ----------------------------------------------------
+
     // Create START marker
     Descriptor startDesc;
     startDesc.offset = 0;
     startDesc.length = 0;
     memset(startDesc.name, 0, 9);
     strncpy(startDesc.name, (dirName + "_START").c_str(), 8);
-    
+
     // Create END marker
     Descriptor endDesc;
     endDesc.offset = 0;
     endDesc.length = 0;
     memset(endDesc.name, 0, 9);
     strncpy(endDesc.name, (dirName + "_END").c_str(), 8);
-    
+
+    // Insert into vector
     descriptors.insert(descriptors.begin() + insertIdx, startDesc);
     descriptors.insert(descriptors.begin() + insertIdx + 1, endDesc);
-    
+
     header.numDescriptors += 2;
-    
+
     saveToFile();
-    
     delete root;
     buildTree();
 }
@@ -276,16 +309,32 @@ void Wad::createDirectory(const string &path) {
 void Wad::createFile(const string &path) {
     Node* parent = getParentNode(path);
     if (parent == nullptr) return;
-    
+
     string fileName = getFileName(path);
 
+    // Reject empty names
+    if (fileName.empty()) {
+        return;
+    }
+
+    // --- FIX: Prevent creating files that look like directory markers ---
     if (fileName.length() > 6 && fileName.substr(fileName.length() - 6) == "_START") {
         return;
     }
     if (fileName.length() > 4 && fileName.substr(fileName.length() - 4) == "_END") {
         return;
     }
-    
+    // Enforce max filename length (8 chars total)
+    if (fileName.length() > 8) {
+        return;
+    }
+    // Disallow names matching E#M# pattern anywhere
+    if (fileName.length() == 4 && fileName[0] == 'E' && fileName[2] == 'M' &&
+        isdigit(fileName[1]) && isdigit(fileName[3])) {
+        return;
+    }
+    // ------------------------------------------------------------------
+
     if (parent != root && parent->isDirectory) {
         string parentName = parent->name;
         if (parentName.length() == 4 && parentName[0] == 'E' && 
@@ -293,7 +342,8 @@ void Wad::createFile(const string &path) {
             return;
         }
     }
-    
+
+    // --- FIX: Logic to find the CORRECT insertion index (Same as createDirectory) ---
     int insertIdx = descriptors.size();
     
     if (parent != root) {
@@ -315,18 +365,19 @@ void Wad::createFile(const string &path) {
             }
         }
     }
-    
+    // -------------------------------------------------------------------------------
+
     Descriptor fileDesc;
     fileDesc.offset = 0;
     fileDesc.length = 0;
+    memset(fileDesc.name, 0, 9);
     strncpy(fileDesc.name, fileName.c_str(), 8);
-    fileDesc.name[8] = '\0';
+    // Ensure null termination explicitly if needed, though memset handles it
     
     descriptors.insert(descriptors.begin() + insertIdx, fileDesc);
     header.numDescriptors++;
-    
+
     saveToFile();
-    
     delete root;
     buildTree();
 }
@@ -342,7 +393,13 @@ int Wad::writeToFile(const string &path, const char *buffer, int length, int off
     int fd = open(wadPath.c_str(), O_RDWR);
     if (fd < 0) return -1;
 
-    // The file is empty
+    // Do not write to existing files
+    if (desc.length != 0) {
+        close(fd);
+        return 0;
+    }
+
+    // The file is empty (new file)
     if (desc.length == 0) {
         desc.offset = header.descriptorOffset;
         desc.length = length;
@@ -351,28 +408,6 @@ int Wad::writeToFile(const string &path, const char *buffer, int length, int off
         write(fd, buffer, length);
 
         header.descriptorOffset += length;
-    }
-    // The file has data
-    else {
-        if (offset + length > (int)desc.length) {
-             int oldSize = desc.length;
-             int newSize = offset + length;
-             int oldOffset = desc.offset;
-
-             desc.offset = header.descriptorOffset;
-             desc.length = newSize;
-             header.descriptorOffset += newSize;
-
-             lseek(fd, desc.offset, SEEK_SET);
-             write(fd, fileData.data() + oldOffset, oldSize);
-
-             lseek(fd, desc.offset + offset, SEEK_SET);
-             write(fd, buffer, length);
-        } 
-        else {
-            lseek(fd, desc.offset + offset, SEEK_SET);
-            write(fd, buffer, length);
-        }
     }
     
     close(fd);
